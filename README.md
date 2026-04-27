@@ -82,12 +82,18 @@ npm install
 npm run build
 
 export SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
-export SHOPIFY_CLIENT_ID="$(pass show aiwerk/shopify-dev-client-id)"
-export SHOPIFY_CLIENT_SECRET="$(pass show aiwerk/shopify-dev-client-secret)"
+export SHOPIFY_CLIENT_ID=YOUR_CLIENT_ID
+export SHOPIFY_CLIENT_SECRET=YOUR_CLIENT_SECRET
 node dist/src/server.js
 ```
 
-(Replace the `pass(1)` lookups with your own secret-retrieval method if you don't use `pass`. Plain inline values work too.)
+Pull the secrets from your preferred secret store however you like. For example, with `pass(1)`:
+
+```bash
+SHOPIFY_CLIENT_ID=$(pass show aiwerk/shopify-dev-client-id)
+SHOPIFY_CLIENT_SECRET=$(pass show aiwerk/shopify-dev-client-secret)
+export SHOPIFY_CLIENT_ID SHOPIFY_CLIENT_SECRET
+```
 
 ## Tests
 
