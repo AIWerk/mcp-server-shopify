@@ -7,7 +7,16 @@ import * as z from 'zod/v4';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
-import { getProduct, listProducts, searchProducts } from './tools/products.js';
+import {
+  addProductTag,
+  archiveProduct,
+  createProduct,
+  getProduct,
+  listProducts,
+  removeProductTag,
+  searchProducts,
+  updateProduct,
+} from './tools/products.js';
 
 function readPackageVersion(): string {
   if (!import.meta.url) return '0.0.0-sandbox';
@@ -115,6 +124,114 @@ export function createServer() {
     async (args) => {
       try {
         return toolSuccess(await searchProducts(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Products (write) ----
+
+  server.registerTool(
+    'shopify_create_product',
+    {
+      description:
+        'Create a new product. Required: title. Optional: descriptionHtml, productType, vendor, tags, status (ACTIVE|ARCHIVED|DRAFT, default ACTIVE), handle. Returns product + userErrors.',
+      inputSchema: {
+        title: z.string().min(1),
+        descriptionHtml: z.string().optional(),
+        productType: z.string().optional(),
+        vendor: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        status: z.enum(['ACTIVE', 'ARCHIVED', 'DRAFT']).optional(),
+        handle: z.string().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await createProduct(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_update_product',
+    {
+      description:
+        'Update fields on an existing product by GID or numeric ID. Required: id. All other fields are optional and only applied if provided. Returns product + userErrors.',
+      inputSchema: {
+        id: z.string().min(1),
+        title: z.string().optional(),
+        descriptionHtml: z.string().optional(),
+        productType: z.string().optional(),
+        vendor: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        status: z.enum(['ACTIVE', 'ARCHIVED', 'DRAFT']).optional(),
+        handle: z.string().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await updateProduct(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_archive_product',
+    {
+      description:
+        'Archive a product (sets status to ARCHIVED, hiding it from sale). Reversible. Destructive: requires confirm=true. Without confirm, returns a structured "would do X" response without firing.',
+      inputSchema: {
+        id: z.string().min(1),
+        confirm: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await archiveProduct(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_add_product_tag',
+    {
+      description:
+        'Add one or more tags to a product. Required: productId, tags (non-empty array). Idempotent server-side. Returns the updated product node + userErrors.',
+      inputSchema: {
+        productId: z.string().min(1),
+        tags: z.array(z.string().min(1)).min(1),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await addProductTag(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_remove_product_tag',
+    {
+      description:
+        'Remove one or more tags from a product. Required: productId, tags (non-empty array). Returns the updated product node + userErrors.',
+      inputSchema: {
+        productId: z.string().min(1),
+        tags: z.array(z.string().min(1)).min(1),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await removeProductTag(args));
       } catch (err) {
         return toolError(err);
       }

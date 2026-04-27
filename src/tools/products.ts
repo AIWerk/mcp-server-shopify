@@ -207,3 +207,159 @@ function clampFirst(value: number | undefined, fallback: number): number {
   if (value > 250) return 250;
   return Math.floor(value);
 }
+
+// ---- Write tools ----
+
+type ProductStatus = 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
+
+export interface CreateProductInput {
+  title: string;
+  descriptionHtml?: string;
+  productType?: string;
+  vendor?: string;
+  tags?: string[];
+  status?: ProductStatus;
+  handle?: string;
+}
+
+export async function createProduct(input: CreateProductInput) {
+  if (!input.title || input.title.trim().length === 0) {
+    throw new Error('create_product requires a non-empty title');
+  }
+  const product: Record<string, unknown> = { title: input.title };
+  if (input.descriptionHtml !== undefined) product.descriptionHtml = input.descriptionHtml;
+  if (input.productType !== undefined) product.productType = input.productType;
+  if (input.vendor !== undefined) product.vendor = input.vendor;
+  if (input.tags !== undefined) product.tags = input.tags;
+  if (input.status !== undefined) product.status = input.status;
+  if (input.handle !== undefined) product.handle = input.handle;
+
+  const query = `
+    ${PRODUCT_FRAGMENT}
+    mutation CreateProduct($product: ProductCreateInput!) {
+      productCreate(product: $product) {
+        product { ...ProductFields }
+        userErrors { field message code }
+      }
+    }
+  `;
+
+  const { data } = await shopifyGraphQL<{
+    productCreate: {
+      product: ProductNode | null;
+      userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+    };
+  }>(query, { product });
+
+  return {
+    product: data.productCreate.product ? shapeProduct(data.productCreate.product) : null,
+    userErrors: data.productCreate.userErrors,
+  };
+}
+
+export interface UpdateProductInput {
+  id: string;
+  title?: string;
+  descriptionHtml?: string;
+  productType?: string;
+  vendor?: string;
+  tags?: string[];
+  status?: ProductStatus;
+  handle?: string;
+}
+
+export async function updateProduct(input: UpdateProductInput) {
+  const id = buildGid('Product', input.id);
+  const product: Record<string, unknown> = { id };
+  if (input.title !== undefined) product.title = input.title;
+  if (input.descriptionHtml !== undefined) product.descriptionHtml = input.descriptionHtml;
+  if (input.productType !== undefined) product.productType = input.productType;
+  if (input.vendor !== undefined) product.vendor = input.vendor;
+  if (input.tags !== undefined) product.tags = input.tags;
+  if (input.status !== undefined) product.status = input.status;
+  if (input.handle !== undefined) product.handle = input.handle;
+
+  const query = `
+    ${PRODUCT_FRAGMENT}
+    mutation UpdateProduct($product: ProductUpdateInput!) {
+      productUpdate(product: $product) {
+        product { ...ProductFields }
+        userErrors { field message code }
+      }
+    }
+  `;
+
+  const { data } = await shopifyGraphQL<{
+    productUpdate: {
+      product: ProductNode | null;
+      userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+    };
+  }>(query, { product });
+
+  return {
+    product: data.productUpdate.product ? shapeProduct(data.productUpdate.product) : null,
+    userErrors: data.productUpdate.userErrors,
+  };
+}
+
+export interface ArchiveProductInput {
+  id: string;
+  confirm?: boolean;
+}
+
+export async function archiveProduct(input: ArchiveProductInput) {
+  const id = buildGid('Product', input.id);
+  if (input.confirm !== true) {
+    return {
+      requiresConfirmation: true,
+      action: `Archive product ${id} (hides from sale; reversible by setting status back to ACTIVE)`,
+      hint: 'Pass confirm: true to proceed',
+      productId: id,
+    };
+  }
+  return updateProduct({ id, status: 'ARCHIVED' });
+}
+
+export interface ProductTagInput {
+  productId: string;
+  tags: string[];
+}
+
+export async function addProductTag(input: ProductTagInput) {
+  return modifyProductTags(input, 'add');
+}
+
+export async function removeProductTag(input: ProductTagInput) {
+  return modifyProductTags(input, 'remove');
+}
+
+async function modifyProductTags(
+  input: ProductTagInput,
+  op: 'add' | 'remove'
+): Promise<{
+  node: { id: string; tags?: string[] } | null;
+  userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+}> {
+  if (!Array.isArray(input.tags) || input.tags.length === 0) {
+    throw new Error(`${op}_product_tag requires a non-empty tags array`);
+  }
+  const id = buildGid('Product', input.productId);
+  const mutationName = op === 'add' ? 'tagsAdd' : 'tagsRemove';
+  const query = `
+    mutation ModifyTags($id: ID!, $tags: [String!]!) {
+      ${mutationName}(id: $id, tags: $tags) {
+        node { id ... on Product { tags } }
+        userErrors { field message code }
+      }
+    }
+  `;
+
+  const { data } = await shopifyGraphQL<{
+    [key: string]: {
+      node: { id: string; tags?: string[] } | null;
+      userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+    };
+  }>(query, { id, tags: input.tags });
+
+  return data[mutationName];
+}

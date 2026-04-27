@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getProduct, listProducts, searchProducts } from '../tools/products.js';
+import {
+  addProductTag,
+  archiveProduct,
+  createProduct,
+  getProduct,
+  listProducts,
+  removeProductTag,
+  searchProducts,
+  updateProduct,
+} from '../tools/products.js';
 import { clearTokenCache } from '../auth.js';
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -149,5 +158,131 @@ describe('product tools', () => {
     expect(body.variables.query).toBe('shirt');
     expect(body.variables.sortKey).toBe('RELEVANCE');
     expect(body.variables.first).toBe(5);
+  });
+
+  it('createProduct sends ProductCreateInput and returns product + userErrors', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          productCreate: {
+            product: sampleProduct,
+            userErrors: [],
+          },
+        },
+      }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await createProduct({ title: 'New Tee', vendor: 'Acme', tags: ['tee'] });
+    expect(result.product?.id).toBe('gid://shopify/Product/1');
+    expect(result.userErrors).toEqual([]);
+
+    const body = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string) as {
+      query: string;
+      variables: { product: Record<string, unknown> };
+    };
+    expect(body.query).toContain('productCreate(product: $product)');
+    expect(body.variables.product).toEqual({ title: 'New Tee', vendor: 'Acme', tags: ['tee'] });
+  });
+
+  it('createProduct rejects empty title', async () => {
+    await expect(createProduct({ title: '   ' })).rejects.toThrow(/title/);
+  });
+
+  it('createProduct surfaces userErrors verbatim', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          productCreate: {
+            product: null,
+            userErrors: [{ field: ['title'], message: 'Title is too short', code: 'TOO_SHORT' }],
+          },
+        },
+      })) as unknown as typeof fetch;
+
+    const result = await createProduct({ title: 'x' });
+    expect(result.product).toBeNull();
+    expect(result.userErrors[0].message).toContain('too short');
+  });
+
+  it('updateProduct converts numeric id to GID and sends only provided fields', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: { productUpdate: { product: sampleProduct, userErrors: [] } },
+      }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await updateProduct({ id: '42', vendor: 'Beta' });
+
+    const body = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string) as {
+      variables: { product: Record<string, unknown> };
+    };
+    expect(body.variables.product.id).toBe('gid://shopify/Product/42');
+    expect(body.variables.product.vendor).toBe('Beta');
+    expect(Object.keys(body.variables.product).sort()).toEqual(['id', 'vendor']);
+  });
+
+  it('archiveProduct without confirm returns soft-confirm response without calling API', async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await archiveProduct({ id: '7' });
+    expect(result).toMatchObject({
+      requiresConfirmation: true,
+      productId: 'gid://shopify/Product/7',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('archiveProduct with confirm=true issues productUpdate(status: ARCHIVED)', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: { productUpdate: { product: { ...sampleProduct, status: 'ARCHIVED' }, userErrors: [] } },
+      }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await archiveProduct({ id: '7', confirm: true });
+    expect((result as { product: { status: string } | null }).product?.status).toBe('ARCHIVED');
+
+    const body = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string) as {
+      variables: { product: Record<string, unknown> };
+    };
+    expect(body.variables.product.status).toBe('ARCHIVED');
+  });
+
+  it('addProductTag uses tagsAdd mutation', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: { tagsAdd: { node: { id: 'gid://shopify/Product/1', tags: ['tee', 'sale'] }, userErrors: [] } },
+      }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await addProductTag({ productId: '1', tags: ['sale'] });
+    expect(result.node?.tags).toContain('sale');
+
+    const body = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string) as { query: string };
+    expect(body.query).toContain('tagsAdd(id: $id, tags: $tags)');
+  });
+
+  it('removeProductTag uses tagsRemove mutation', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: { tagsRemove: { node: { id: 'gid://shopify/Product/1', tags: [] }, userErrors: [] } },
+      }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await removeProductTag({ productId: '1', tags: ['sale'] });
+
+    const body = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string) as { query: string };
+    expect(body.query).toContain('tagsRemove(id: $id, tags: $tags)');
+  });
+
+  it('addProductTag rejects empty tags array', async () => {
+    await expect(addProductTag({ productId: '1', tags: [] })).rejects.toThrow(/tags/);
   });
 });
