@@ -196,7 +196,7 @@ describe('product tools', () => {
         data: {
           productCreate: {
             product: null,
-            userErrors: [{ field: ['title'], message: 'Title is too short', code: 'TOO_SHORT' }],
+            userErrors: [{ field: ['title'], message: 'Title is too short' }],
           },
         },
       })) as unknown as typeof fetch;

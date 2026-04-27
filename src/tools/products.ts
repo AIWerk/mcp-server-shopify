@@ -239,7 +239,7 @@ export async function createProduct(input: CreateProductInput) {
     mutation CreateProduct($product: ProductCreateInput!) {
       productCreate(product: $product) {
         product { ...ProductFields }
-        userErrors { field message code }
+        userErrors { field message }
       }
     }
   `;
@@ -247,7 +247,7 @@ export async function createProduct(input: CreateProductInput) {
   const { data } = await shopifyGraphQL<{
     productCreate: {
       product: ProductNode | null;
-      userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+      userErrors: Array<{ field: string[] | null; message: string }>;
     };
   }>(query, { product });
 
@@ -284,7 +284,7 @@ export async function updateProduct(input: UpdateProductInput) {
     mutation UpdateProduct($product: ProductUpdateInput!) {
       productUpdate(product: $product) {
         product { ...ProductFields }
-        userErrors { field message code }
+        userErrors { field message }
       }
     }
   `;
@@ -292,7 +292,7 @@ export async function updateProduct(input: UpdateProductInput) {
   const { data } = await shopifyGraphQL<{
     productUpdate: {
       product: ProductNode | null;
-      userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+      userErrors: Array<{ field: string[] | null; message: string }>;
     };
   }>(query, { product });
 
@@ -338,7 +338,7 @@ async function modifyProductTags(
   op: 'add' | 'remove'
 ): Promise<{
   node: { id: string; tags?: string[] } | null;
-  userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+  userErrors: Array<{ field: string[] | null; message: string }>;
 }> {
   if (!Array.isArray(input.tags) || input.tags.length === 0) {
     throw new Error(`${op}_product_tag requires a non-empty tags array`);
@@ -349,7 +349,7 @@ async function modifyProductTags(
     mutation ModifyTags($id: ID!, $tags: [String!]!) {
       ${mutationName}(id: $id, tags: $tags) {
         node { id ... on Product { tags } }
-        userErrors { field message code }
+        userErrors { field message }
       }
     }
   `;
@@ -357,7 +357,7 @@ async function modifyProductTags(
   const { data } = await shopifyGraphQL<{
     [key: string]: {
       node: { id: string; tags?: string[] } | null;
-      userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+      userErrors: Array<{ field: string[] | null; message: string }>;
     };
   }>(query, { id, tags: input.tags });
 

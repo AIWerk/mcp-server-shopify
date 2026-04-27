@@ -65,6 +65,11 @@ describe('inventory tools', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(tokenResponse())
       .mockResolvedValueOnce(jsonResponse({ data: {
+        inventoryItem: {
+          inventoryLevel: { quantities: [{ name: 'available', quantity: 5 }] },
+        },
+      } }))
+      .mockResolvedValueOnce(jsonResponse({ data: {
         inventoryAdjustQuantities: {
           inventoryAdjustmentGroup: {
             id: 'gid://shopify/InventoryAdjustmentGroup/X',
@@ -84,11 +89,22 @@ describe('inventory tools', () => {
     const r = await adjustInventoryLevel({ inventoryItemId: '9', locationId: '2', delta: 3 });
     expect(r.adjustment?.changes[0].quantityAfterChange).toBe(8);
 
-    const body = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string) as {
-      variables: { input: { reason: string; name: string; changes: Array<{ delta: number }> } };
+    const body = JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string) as {
+      variables: { input: { reason: string; name: string; changes: Array<{ delta: number; changeFromQuantity: number }> } };
     };
     expect(body.variables.input.reason).toBe('correction');
     expect(body.variables.input.name).toBe('available');
     expect(body.variables.input.changes[0].delta).toBe(3);
+    expect(body.variables.input.changes[0].changeFromQuantity).toBe(5);
+  });
+
+  it('adjustInventoryLevel surfaces userError when level not found', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({ data: { inventoryItem: null } })) as unknown as typeof fetch;
+
+    const r = await adjustInventoryLevel({ inventoryItemId: '9', locationId: '2', delta: 3 });
+    expect(r.adjustment).toBeNull();
+    expect(r.userErrors[0].message).toContain('not found');
   });
 });

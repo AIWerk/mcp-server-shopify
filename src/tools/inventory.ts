@@ -1,8 +1,10 @@
 // Inventory tools: get_inventory_level, adjust_inventory_level.
 // inventoryAdjustQuantities is the modern mutation (replaces the legacy
 // inventoryAdjustQuantity). Reason is required by Shopify; we default to
-// "correction".
+// "correction". The mutation also requires the @idempotent directive with a
+// per-call key, plus a changeFromQuantity for optimistic concurrency.
 
+import { randomUUID } from 'node:crypto';
 import { shopifyGraphQL } from '../api.js';
 import { buildGid } from '../types.js';
 
@@ -78,9 +80,38 @@ export async function adjustInventoryLevel(input: AdjustInventoryLevelInput) {
   const reason = input.reason ?? 'correction';
   const name = input.name ?? 'available';
 
+  // The modern InventoryChangeInput requires changeFromQuantity for optimistic
+  // concurrency control. Fetch the current quantity first, then submit the delta.
+  const currentQuery = `
+    query CurrentQty($inventoryItemId: ID!, $locationId: ID!, $name: String!) {
+      inventoryItem(id: $inventoryItemId) {
+        inventoryLevel(locationId: $locationId) {
+          quantities(names: [$name]) { name quantity }
+        }
+      }
+    }
+  `;
+  const cur = await shopifyGraphQL<{
+    inventoryItem: {
+      inventoryLevel: { quantities: Array<{ name: string; quantity: number }> } | null;
+    } | null;
+  }>(currentQuery, { inventoryItemId, locationId, name });
+
+  const currentQty = cur.data.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity;
+  if (typeof currentQty !== 'number') {
+    return {
+      adjustment: null,
+      userErrors: [{
+        field: ['inventoryItemId', 'locationId'],
+        message: `Inventory level not found for item ${inventoryItemId} at ${locationId}`,
+      }],
+    };
+  }
+
+  const idempotencyKey = randomUUID();
   const query = `
-    mutation AdjustInventory($input: InventoryAdjustQuantitiesInput!) {
-      inventoryAdjustQuantities(input: $input) {
+    mutation AdjustInventory($input: InventoryAdjustQuantitiesInput!, $idempotencyKey: String!) {
+      inventoryAdjustQuantities(input: $input) @idempotent(key: $idempotencyKey) {
         inventoryAdjustmentGroup {
           id
           createdAt
@@ -88,7 +119,7 @@ export async function adjustInventoryLevel(input: AdjustInventoryLevelInput) {
           referenceDocumentUri
           changes { name delta quantityAfterChange location { id name } }
         }
-        userErrors { field message code }
+        userErrors { field message }
       }
     }
   `;
@@ -98,8 +129,14 @@ export async function adjustInventoryLevel(input: AdjustInventoryLevelInput) {
       reason,
       name,
       ...(input.referenceDocumentUri ? { referenceDocumentUri: input.referenceDocumentUri } : {}),
-      changes: [{ delta: input.delta, inventoryItemId, locationId }],
+      changes: [{
+        delta: input.delta,
+        inventoryItemId,
+        locationId,
+        changeFromQuantity: currentQty,
+      }],
     },
+    idempotencyKey,
   };
 
   const { data } = await shopifyGraphQL<{
@@ -116,7 +153,7 @@ export async function adjustInventoryLevel(input: AdjustInventoryLevelInput) {
           location: { id: string; name: string };
         }>;
       } | null;
-      userErrors: Array<{ field: string[] | null; message: string; code: string | null }>;
+      userErrors: Array<{ field: string[] | null; message: string }>;
     };
   }>(query, variables);
 
