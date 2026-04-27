@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Major:** README drift — `metaobjects` → `metafields` in description, scopes list trimmed from 14 to the 12 actually required (removed `read_metaobjects`/`write_metaobjects`), local-dev snippet cleaned, removed unsubstantiated integration-test claim.
 - **Medium:** `shopify_create_draft_order` line items now Zod-enforce the `variantId OR (title + originalUnitPrice)` rule with a `.refine()` rather than relying on Shopify's `userErrors`.
 - **Medium:** Build now uses `tsconfig.build.json` which excludes `__tests__/` from the emitted output. The tarball no longer ships compiled test files. New `npm run typecheck` script type-checks everything (including tests) without emitting; `prepublishOnly` now runs typecheck → build → test.
+- **Medium:** GitHub Actions CI workflow at `.github/workflows/ci.yml` runs `npm ci`, typecheck, build, and test on push and pull-request to `main` against Node 20 and Node 22.
+- **Medium:** Bumped `vitest` dev dependency from `^2.1.0` to `^3.2.4`. Closes the 5 moderate audit findings (esbuild → vite → @vitest/mocker → vite-node → vitest chain). `npm audit` now reports 0 vulnerabilities. All 74 tests pass on the new version with no source changes.
 
 ### Added
 
