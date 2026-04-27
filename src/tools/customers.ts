@@ -5,7 +5,6 @@ import {
   buildGid,
   flattenConnection,
   type PageInfo,
-  withTruncationMarker,
 } from '../types.js';
 
 const CUSTOMER_FRAGMENT = `
@@ -28,9 +27,8 @@ const CUSTOMER_FRAGMENT = `
     defaultAddress {
       address1 address2 city province country zip phone name
     }
-    addresses(first: 50) {
-      pageInfo { hasNextPage hasPreviousPage endCursor startCursor }
-      edges { node { id address1 address2 city province country zip phone name } }
+    addresses {
+      id address1 address2 city province country zip phone name
     }
   }
 `;
@@ -52,11 +50,10 @@ interface CustomerNode {
   numberOfOrders: string;
   amountSpent: { amount: string; currencyCode: string };
   defaultAddress: unknown;
-  addresses: { pageInfo: PageInfo; edges: Array<{ node: unknown }> };
+  addresses: unknown[];
 }
 
 function shapeCustomer(c: CustomerNode) {
-  const addresses = flattenConnection(c.addresses);
   return {
     id: c.id,
     firstName: c.firstName,
@@ -74,7 +71,7 @@ function shapeCustomer(c: CustomerNode) {
     numberOfOrders: c.numberOfOrders,
     amountSpent: c.amountSpent,
     defaultAddress: c.defaultAddress,
-    addresses: withTruncationMarker(addresses.items, c.addresses.pageInfo.hasNextPage),
+    addresses: c.addresses,
   };
 }
 

@@ -45,10 +45,7 @@ const sampleCustomer = {
   numberOfOrders: '0',
   amountSpent: { amount: '0.00', currencyCode: 'CHF' },
   defaultAddress: null,
-  addresses: {
-    pageInfo: { hasNextPage: false, hasPreviousPage: false, endCursor: null, startCursor: null },
-    edges: [],
-  },
+  addresses: [],
 };
 
 describe('customer tools', () => {
@@ -67,7 +64,7 @@ describe('customer tools', () => {
 
     const r = await listCustomers({});
     expect(r.items[0].displayName).toBe('Buy Er');
-    expect(r.items[0].addresses.truncated).toBe(false);
+    expect(r.items[0].addresses).toEqual([]);
     expect(r.totalCount).toBe('unknown');
   });
 
