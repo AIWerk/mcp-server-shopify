@@ -20,6 +20,10 @@ The OAuth access token derived from the client credentials is held in memory onl
 
 The README lists the 14 scopes needed for the full v0.1 tool surface. If your use case only needs a subset (e.g. read-only orders), trim the scope list when you create the Dev Dashboard app version. The server gracefully degrades: a tool whose backing scope is missing will return a structured error rather than crash.
 
+## Protected customer data
+
+Shopify gates access to customer-bearing objects (`Customer`, `DraftOrder`, and `customer { ... }` selections inside `Order`) behind a separate compliance review at https://shopify.dev/docs/apps/launch/protected-customer-data. Without approval, the affected tools will return a clean `ACCESS_DENIED` GraphQL error rather than partial data. Product, inventory, collection, location, metafield, and shop-info tools are unaffected.
+
 ## Rate-limit and cost awareness
 
 The server respects the Shopify GraphQL cost-based rate limit. Heavy queries that risk throttling are paginated by default. The server does not retry transient 5xx responses indefinitely; it surfaces the failure to the AI client after a single retry with backoff.

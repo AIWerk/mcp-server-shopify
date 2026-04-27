@@ -53,7 +53,24 @@ read_publications
 
 ## Tools
 
-`v0.1` ships ~25 tools across the Shopify Admin GraphQL API. See `src/tools/` for the implementation; tool names are shown in `tools/list` after the server starts.
+`v0.1` ships 28 tools across the Shopify Admin GraphQL API. See `src/tools/` for the implementation; tool names are shown in `tools/list` after the server starts.
+
+### Protected customer data
+
+Shopify gates access to customer-bearing objects (`Customer`, `DraftOrder`, plus `customer { ... }` selections inside `Order`) behind a separate approval. Apps not approved for protected customer data will see this error from the affected tools:
+
+```
+GraphQL error: This app is not approved to access the Customer object.
+See https://shopify.dev/docs/apps/launch/protected-customer-data
+```
+
+The server returns this error verbatim to the AI client. Apply for protected-data approval at the link above if you need:
+
+- `shopify_list_customers`, `_get_customer`, `_search_customers`, `_create_customer`, `_update_customer`, `_add_customer_note`
+- `shopify_create_draft_order`, `_complete_draft_order`
+- `shopify_get_order`, `_list_orders`, `_search_orders`, `_mark_order_paid`, `_cancel_order`, `_add_order_note` (these may also be affected when the response includes customer fields)
+
+Product, inventory, location, collection, metafield, and shop-info tools are unaffected.
 
 ## API version
 
