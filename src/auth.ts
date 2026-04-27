@@ -54,7 +54,62 @@ export function getCredentials(): ShopifyCredentials {
 }
 
 export function normalizeStoreDomain(raw: string): string {
-  return raw.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase();
+  if (typeof raw !== 'string') {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must be a string');
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must not be empty');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    throw new ShopifyAuthError(
+      400,
+      `SHOPIFY_STORE_DOMAIN is not a valid URL: ${truncateForError(raw)}`
+    );
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must use http(s) scheme');
+  }
+  if (parsed.pathname && parsed.pathname !== '/' && parsed.pathname !== '') {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must not include a path');
+  }
+  if (parsed.search) {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must not include a query string');
+  }
+  if (parsed.hash) {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must not include a fragment');
+  }
+  if (parsed.username || parsed.password) {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must not include userinfo');
+  }
+  if (parsed.port && parsed.port !== '443') {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must not specify a non-default port');
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname.length === 0) {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must include a hostname');
+  }
+  if (!hostname.endsWith('.myshopify.com')) {
+    throw new ShopifyAuthError(
+      400,
+      'SHOPIFY_STORE_DOMAIN must be a *.myshopify.com hostname'
+    );
+  }
+  if (hostname === '.myshopify.com' || hostname === 'myshopify.com') {
+    throw new ShopifyAuthError(400, 'SHOPIFY_STORE_DOMAIN must include a shop name');
+  }
+
+  return hostname;
+}
+
+function truncateForError(s: string): string {
+  return s.length > 80 ? `${s.slice(0, 77)}...` : s;
 }
 
 export async function getAccessToken(): Promise<string> {

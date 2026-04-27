@@ -22,11 +22,51 @@ function clearEnv() {
 }
 
 describe('normalizeStoreDomain', () => {
-  it('strips https and trailing slash', () => {
+  it('passes a bare myshopify.com domain through', () => {
+    expect(normalizeStoreDomain('foo.myshopify.com')).toBe('foo.myshopify.com');
+  });
+  it('strips https scheme and trailing slash, lowercases', () => {
     expect(normalizeStoreDomain('https://Foo.myshopify.com/')).toBe('foo.myshopify.com');
   });
-  it('passes a bare domain through', () => {
-    expect(normalizeStoreDomain('foo.myshopify.com')).toBe('foo.myshopify.com');
+  it('strips http scheme', () => {
+    expect(normalizeStoreDomain('http://shop.myshopify.com')).toBe('shop.myshopify.com');
+  });
+
+  it('rejects non-myshopify hostnames', () => {
+    expect(() => normalizeStoreDomain('evil.example.com')).toThrow(/myshopify\.com/);
+    expect(() => normalizeStoreDomain('https://evil.example.com')).toThrow(/myshopify\.com/);
+  });
+  it('rejects suffix tricks (foo.myshopify.com.evil.com)', () => {
+    expect(() => normalizeStoreDomain('foo.myshopify.com.evil.com')).toThrow(/myshopify\.com/);
+  });
+  it('rejects names that match without a dot (evilmyshopify.com)', () => {
+    expect(() => normalizeStoreDomain('evilmyshopify.com')).toThrow(/myshopify\.com/);
+  });
+  it('rejects bare myshopify.com without a shop', () => {
+    expect(() => normalizeStoreDomain('myshopify.com')).toThrow(/myshopify\.com/);
+  });
+  it('rejects values that include a path', () => {
+    expect(() => normalizeStoreDomain('https://foo.myshopify.com/admin')).toThrow(/path/);
+    expect(() => normalizeStoreDomain('foo.myshopify.com/admin')).toThrow(/path/);
+  });
+  it('rejects values that include a query string', () => {
+    expect(() => normalizeStoreDomain('https://foo.myshopify.com/?x=1')).toThrow(/query/);
+  });
+  it('rejects values that include a fragment', () => {
+    expect(() => normalizeStoreDomain('https://foo.myshopify.com/#x')).toThrow(/fragment/);
+  });
+  it('rejects values that include userinfo', () => {
+    expect(() => normalizeStoreDomain('https://user:pw@foo.myshopify.com')).toThrow(/userinfo/);
+  });
+  it('rejects values with a non-default port', () => {
+    expect(() => normalizeStoreDomain('https://foo.myshopify.com:8080')).toThrow(/port/);
+  });
+  it('rejects empty input', () => {
+    expect(() => normalizeStoreDomain('')).toThrow(/empty/);
+    expect(() => normalizeStoreDomain('   ')).toThrow(/empty/);
+  });
+  it('rejects malformed URLs', () => {
+    expect(() => normalizeStoreDomain('https://')).toThrow();
   });
 });
 

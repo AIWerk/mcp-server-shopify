@@ -619,7 +619,10 @@ export function createServer() {
             sku: z.string().optional(),
             requiresShipping: z.boolean().optional(),
             taxable: z.boolean().optional(),
-          })
+          }).refine(
+            (li) => Boolean(li.variantId) || (Boolean(li.title) && Boolean(li.originalUnitPrice)),
+            { message: 'Each line item needs either variantId, or both title and originalUnitPrice (custom item)' }
+          )
         ).min(1),
         email: z.string().optional(),
         customerId: z.string().optional(),

@@ -1,6 +1,6 @@
 # @aiwerk/mcp-server-shopify
 
-Shopify Admin GraphQL API MCP server. Lets an AI agent read and write to a Shopify store: products, orders, customers, inventory, draft orders, collections, locations, metaobjects.
+Shopify Admin GraphQL API MCP server. Lets an AI agent read and write to a Shopify store: products, orders, customers, inventory, draft orders, collections, locations, metafields.
 
 Built and signed by [AIWerk](https://aiwerkmcp.com). MIT licensed.
 
@@ -38,7 +38,7 @@ The server automatically exchanges the client credentials for an Admin API acces
 
 ### Scopes
 
-The 14 scopes below cover the full v0.1 tool surface. Trim to a smaller set if you want a more restricted token.
+The 12 scopes below cover the full v0.1 tool surface. Trim to a smaller set if you want a more restricted token (e.g. read-only orders).
 
 ```
 read_products, write_products,
@@ -47,7 +47,6 @@ read_orders, write_orders,
 read_draft_orders, write_draft_orders,
 read_inventory, write_inventory,
 read_locations,
-read_metaobjects, write_metaobjects,
 read_publications
 ```
 
@@ -81,11 +80,14 @@ The server pins the Shopify GraphQL Admin API to `2026-04`. Bumped quarterly per
 ```bash
 npm install
 npm run build
-SHOPIFY_STORE_DOMAIN=your-store.myshopify.com \
-SHOPIFY_CLIENT_ID=$(pass show aiwerk/shopify-dev-client-id) \
-SHOPIFY_CLIENT_SECRET=$(pass show aiwerk/shopify-dev-client-secret) \
-  node dist/src/server.js
+
+export SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
+export SHOPIFY_CLIENT_ID="$(pass show aiwerk/shopify-dev-client-id)"
+export SHOPIFY_CLIENT_SECRET="$(pass show aiwerk/shopify-dev-client-secret)"
+node dist/src/server.js
 ```
+
+(Replace the `pass(1)` lookups with your own secret-retrieval method if you don't use `pass`. Plain inline values work too.)
 
 ## Tests
 
@@ -93,7 +95,7 @@ SHOPIFY_CLIENT_SECRET=$(pass show aiwerk/shopify-dev-client-secret) \
 npm test
 ```
 
-Unit tests use mocked GraphQL responses and run with no external deps. Integration tests against a real Shopify dev store run when `SHOPIFY_INTEGRATION=1` plus the three env vars above are set.
+Unit tests use mocked GraphQL responses and run with no external dependencies. There is no live integration harness in this repo — for now we smoke-test against an internal AIWerk dev store before publish.
 
 ## Security
 

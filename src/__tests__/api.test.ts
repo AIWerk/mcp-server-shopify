@@ -60,15 +60,45 @@ describe('shopifyGraphQL', () => {
     expect(headers['Content-Type']).toBe('application/json');
   });
 
-  it('throws AUTH error on 401', async () => {
-    globalThis.fetch = vi.fn()
+  it('busts token cache on first 401 and retries with a fresh token, then throws AUTH if still 401', async () => {
+    const fetchMock = vi.fn()
       .mockResolvedValueOnce(tokenResponse())
-      .mockResolvedValueOnce(new Response('{}', { status: 401 })) as unknown as typeof fetch;
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     await expect(shopifyGraphQL(`{ shop { name } }`)).rejects.toMatchObject({
       name: 'ShopifyApiError',
       code: 'AUTH',
       status: 401,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('busts token cache on 401 and recovers if the fresh token works', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({ data: { shop: { name: 'Recovered' } } }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await shopifyGraphQL<{ shop: { name: string } }>(`{ shop { name } }`);
+    expect(result.data.shop.name).toBe('Recovered');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('throws AUTH on 403 after a fresh-token retry', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(new Response('{}', { status: 403 }))
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(new Response('{}', { status: 403 })) as unknown as typeof fetch;
+
+    await expect(shopifyGraphQL(`{ shop { name } }`)).rejects.toMatchObject({
+      code: 'AUTH',
+      status: 403,
     });
   });
 

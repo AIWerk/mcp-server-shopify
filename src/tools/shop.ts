@@ -207,6 +207,7 @@ export async function listMetafields(input: ListMetafieldsInput) {
       items: [],
       pageInfo: emptyPageInfo(),
       truncated: false,
+      totalCount: 'unknown' as const,
       error: `No metafields available for ${ownerId}`,
     };
   }
@@ -217,6 +218,7 @@ export async function listMetafields(input: ListMetafieldsInput) {
     items: t.items,
     pageInfo: flat.pageInfo,
     truncated: t.truncated,
+    totalCount: 'unknown' as const,
   };
 }
 

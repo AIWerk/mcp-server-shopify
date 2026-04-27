@@ -8,11 +8,12 @@
     "mcp-server-shopify": "dist/src/server.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/src/server.js",
     "dev": "tsc --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run typecheck && npm run build && npm test"
   },
   "engines": {
     "node": ">=18.0.0"

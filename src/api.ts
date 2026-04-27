@@ -3,7 +3,7 @@
 // Header:   X-Shopify-Access-Token: {token}
 // We retry once on transient failures (429, 5xx, GraphQL THROTTLED).
 
-import { getAccessToken, getCredentials } from './auth.js';
+import { clearTokenCache, getAccessToken, getCredentials } from './auth.js';
 
 export const SHOPIFY_API_VERSION = '2026-04';
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -114,6 +114,10 @@ async function executeWithRetry<T>(
   }
 
   if (response.status === 401 || response.status === 403) {
+    if (attempt === 0) {
+      clearTokenCache();
+      return executeWithRetry<T>(query, variables, attempt + 1);
+    }
     throw new ShopifyApiError(
       'AUTH',
       response.status,

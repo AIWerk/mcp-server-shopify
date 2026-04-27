@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed (Axel review round 1, 2026-04-27)
+
+- **Critical:** `normalizeStoreDomain` now parses with `new URL()` and enforces a bare `*.myshopify.com` hostname. Rejects path, query string, fragment, userinfo, non-default port, suffix tricks (`foo.myshopify.com.evil.com`), name tricks (`evilmyshopify.com`), and bare `myshopify.com`. Closes a token-exfiltration vector where a malicious `SHOPIFY_STORE_DOMAIN` env var could send the client secret to an attacker-controlled host.
+- **Major:** GraphQL 401/403 now busts the in-memory token cache and retries once with a fresh token before throwing `AUTH`. Recovers from early-revoked tokens and scope changes without a server restart.
+- **Major:** `list_metafields` now returns `totalCount: 'unknown'`, completing the honest-pagination contract.
+- **Major:** README drift — `metaobjects` → `metafields` in description, scopes list trimmed from 14 to the 12 actually required (removed `read_metaobjects`/`write_metaobjects`), local-dev snippet cleaned, removed unsubstantiated integration-test claim.
+- **Medium:** `shopify_create_draft_order` line items now Zod-enforce the `variantId OR (title + originalUnitPrice)` rule with a `.refine()` rather than relying on Shopify's `userErrors`.
+- **Medium:** Build now uses `tsconfig.build.json` which excludes `__tests__/` from the emitted output. The tarball no longer ships compiled test files. New `npm run typecheck` script type-checks everything (including tests) without emitting; `prepublishOnly` now runs typecheck → build → test.
+
 ### Added
 
 - 28 tools across 6 modules:
