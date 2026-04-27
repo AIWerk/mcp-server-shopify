@@ -25,6 +25,17 @@ import {
   markOrderPaid,
   searchOrders,
 } from './tools/orders.js';
+import {
+  addCustomerNote,
+  createCustomer,
+  getCustomer,
+  listCustomers,
+  searchCustomers,
+  updateCustomer,
+} from './tools/customers.js';
+import { adjustInventoryLevel, getInventoryLevel } from './tools/inventory.js';
+import { completeDraftOrder, createDraftOrder } from './tools/draft-orders.js';
+import { getShopInfo, listCollections, listLocations, listMetafields } from './tools/shop.js';
 
 function readPackageVersion(): string {
   if (!import.meta.url) return '0.0.0-sandbox';
@@ -82,6 +93,29 @@ const ORDER_SORT_KEYS = [
 ] as const;
 
 const CANCEL_REASONS = ['CUSTOMER', 'DECLINED', 'FRAUD', 'INVENTORY', 'OTHER', 'STAFF'] as const;
+
+const CUSTOMER_SORT_KEYS = [
+  'CREATED_AT',
+  'UPDATED_AT',
+  'NAME',
+  'LOCATION',
+  'ORDERS_COUNT',
+  'TOTAL_SPENT',
+  'LAST_ORDER_DATE',
+  'ID',
+  'RELEVANCE',
+] as const;
+
+const METAFIELD_OWNER_TYPES = [
+  'PRODUCT',
+  'PRODUCTVARIANT',
+  'CUSTOMER',
+  'ORDER',
+  'COLLECTION',
+  'SHOP',
+  'COMPANY',
+  'LOCATION',
+] as const;
 
 export function createServer() {
   const server = new McpServer({
@@ -383,6 +417,348 @@ export function createServer() {
     async (args) => {
       try {
         return toolSuccess(await addOrderNote(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Customers (read) ----
+
+  server.registerTool(
+    'shopify_list_customers',
+    {
+      description:
+        'List customers with optional Shopify search query (e.g. "orders_count:>0 country:CH"). Default first=50, max=250.',
+      inputSchema: {
+        first: z.number().int().min(1).max(250).optional(),
+        after: z.string().optional(),
+        query: z.string().optional(),
+        sortKey: z.enum(CUSTOMER_SORT_KEYS).optional(),
+        reverse: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await listCustomers(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_get_customer',
+    {
+      description:
+        'Get a single customer by GID or numeric ID. Returns full detail including default address, addresses (with truncation marker), tags, locale, and lifetime value.',
+      inputSchema: {
+        id: z.string().min(1),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await getCustomer(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_search_customers',
+    {
+      description:
+        'Search customers by Shopify search query (e.g. "email:foo@bar.com OR last_name:Smith"). Required: query.',
+      inputSchema: {
+        query: z.string().min(1),
+        first: z.number().int().min(1).max(250).optional(),
+        after: z.string().optional(),
+        sortKey: z.enum(CUSTOMER_SORT_KEYS).optional(),
+        reverse: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await searchCustomers(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Customers (write) ----
+
+  server.registerTool(
+    'shopify_create_customer',
+    {
+      description:
+        'Create a customer (customerCreate). At least one of email/phone is required. Optional: firstName, lastName, note, tags, locale.',
+      inputSchema: {
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        note: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        locale: z.string().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await createCustomer(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_update_customer',
+    {
+      description:
+        'Update a customer (customerUpdate). Required: id. All other fields are optional and only applied if provided.',
+      inputSchema: {
+        id: z.string().min(1),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        note: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        locale: z.string().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await updateCustomer(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_add_customer_note',
+    {
+      description:
+        'Add a note to a customer. mode=append (default) reads the current note and concatenates with two newlines; mode=replace overwrites. Append makes one extra read query.',
+      inputSchema: {
+        id: z.string().min(1),
+        note: z.string().min(1),
+        mode: z.enum(['append', 'replace']).optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await addCustomerNote(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Inventory ----
+
+  server.registerTool(
+    'shopify_get_inventory_level',
+    {
+      description:
+        'Get the inventory level (available, on_hand, committed, incoming, reserved) for an inventory item at a single location. Required: inventoryItemId, locationId.',
+      inputSchema: {
+        inventoryItemId: z.string().min(1),
+        locationId: z.string().min(1),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await getInventoryLevel(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_adjust_inventory_level',
+    {
+      description:
+        'Adjust the available or on_hand quantity at a location by a delta (positive or negative integer, non-zero). Uses inventoryAdjustQuantities. Defaults: name=available, reason=correction. Optional: referenceDocumentUri.',
+      inputSchema: {
+        inventoryItemId: z.string().min(1),
+        locationId: z.string().min(1),
+        delta: z.number().int(),
+        name: z.enum(['available', 'on_hand']).optional(),
+        reason: z.string().optional(),
+        referenceDocumentUri: z.string().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await adjustInventoryLevel(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Draft orders ----
+
+  server.registerTool(
+    'shopify_create_draft_order',
+    {
+      description:
+        'Create a draft order. Required: lineItems (non-empty). Each line item needs quantity, plus either variantId (existing variant) or title+originalUnitPrice (custom item). Optional: email, customerId, note, tags, shippingAddress, billingAddress, useCustomerDefaultAddress.',
+      inputSchema: {
+        lineItems: z.array(
+          z.object({
+            variantId: z.string().optional(),
+            quantity: z.number().int().positive(),
+            title: z.string().optional(),
+            originalUnitPrice: z.string().optional(),
+            sku: z.string().optional(),
+            requiresShipping: z.boolean().optional(),
+            taxable: z.boolean().optional(),
+          })
+        ).min(1),
+        email: z.string().optional(),
+        customerId: z.string().optional(),
+        note: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        shippingAddress: z.object({
+          firstName: z.string().optional(),
+          lastName: z.string().optional(),
+          address1: z.string().optional(),
+          address2: z.string().optional(),
+          city: z.string().optional(),
+          province: z.string().optional(),
+          country: z.string().optional(),
+          countryCode: z.string().optional(),
+          zip: z.string().optional(),
+          phone: z.string().optional(),
+          company: z.string().optional(),
+        }).optional(),
+        billingAddress: z.object({
+          firstName: z.string().optional(),
+          lastName: z.string().optional(),
+          address1: z.string().optional(),
+          address2: z.string().optional(),
+          city: z.string().optional(),
+          province: z.string().optional(),
+          country: z.string().optional(),
+          countryCode: z.string().optional(),
+          zip: z.string().optional(),
+          phone: z.string().optional(),
+          company: z.string().optional(),
+        }).optional(),
+        useCustomerDefaultAddress: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await createDraftOrder(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_complete_draft_order',
+    {
+      description:
+        'Complete a draft order, converting it into a real order (draftOrderComplete). Destructive: requires confirm=true. paymentPending=true marks the resulting order as payment pending instead of paid.',
+      inputSchema: {
+        id: z.string().min(1),
+        paymentPending: z.boolean().optional(),
+        confirm: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await completeDraftOrder(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Shop / collections / locations / metafields ----
+
+  server.registerTool(
+    'shopify_get_shop_info',
+    {
+      description:
+        'Get shop-level metadata: name, primary domain, currency, timezone, plan, billing address, contact email, weight unit.',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return toolSuccess(await getShopInfo());
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_list_collections',
+    {
+      description:
+        'List collections with optional Shopify search query. Returns id, title, handle, descriptionHtml, sortOrder, productsCount.',
+      inputSchema: {
+        first: z.number().int().min(1).max(250).optional(),
+        after: z.string().optional(),
+        query: z.string().optional(),
+        reverse: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await listCollections(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_list_locations',
+    {
+      description:
+        'List shop locations (warehouses, retail stores). By default excludes inactive and legacy locations; toggle with includeInactive / includeLegacy.',
+      inputSchema: {
+        first: z.number().int().min(1).max(250).optional(),
+        after: z.string().optional(),
+        includeInactive: z.boolean().optional(),
+        includeLegacy: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await listLocations(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_list_metafields',
+    {
+      description:
+        'List metafields on any HasMetafields resource (Product, ProductVariant, Customer, Order, Collection, Shop, Company, Location). Required: ownerId, ownerType. Optional: namespace filter.',
+      inputSchema: {
+        ownerId: z.string().min(1),
+        ownerType: z.enum(METAFIELD_OWNER_TYPES),
+        first: z.number().int().min(1).max(250).optional(),
+        after: z.string().optional(),
+        namespace: z.string().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await listMetafields(args));
       } catch (err) {
         return toolError(err);
       }
