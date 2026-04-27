@@ -17,6 +17,14 @@ import {
   searchProducts,
   updateProduct,
 } from './tools/products.js';
+import {
+  addOrderNote,
+  cancelOrder,
+  getOrder,
+  listOrders,
+  markOrderPaid,
+  searchOrders,
+} from './tools/orders.js';
 
 function readPackageVersion(): string {
   if (!import.meta.url) return '0.0.0-sandbox';
@@ -59,6 +67,21 @@ const PRODUCT_SORT_KEYS = [
   'ID',
   'RELEVANCE',
 ] as const;
+
+const ORDER_SORT_KEYS = [
+  'PROCESSED_AT',
+  'TOTAL_PRICE',
+  'ID',
+  'CREATED_AT',
+  'UPDATED_AT',
+  'ORDER_NUMBER',
+  'CUSTOMER_NAME',
+  'FINANCIAL_STATUS',
+  'FULFILLMENT_STATUS',
+  'RELEVANCE',
+] as const;
+
+const CANCEL_REASONS = ['CUSTOMER', 'DECLINED', 'FRAUD', 'INVENTORY', 'OTHER', 'STAFF'] as const;
 
 export function createServer() {
   const server = new McpServer({
@@ -232,6 +255,134 @@ export function createServer() {
     async (args) => {
       try {
         return toolSuccess(await removeProductTag(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Orders (read) ----
+
+  server.registerTool(
+    'shopify_list_orders',
+    {
+      description:
+        'List orders with optional Shopify search query (e.g. "financial_status:paid created_at:>2026-01-01"). Default first=50, max=250.',
+      inputSchema: {
+        first: z.number().int().min(1).max(250).optional(),
+        after: z.string().optional(),
+        query: z.string().optional(),
+        sortKey: z.enum(ORDER_SORT_KEYS).optional(),
+        reverse: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await listOrders(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_get_order',
+    {
+      description:
+        'Get a single order by GID or numeric ID. Returns full detail including line items (with truncation marker), customer, addresses, and financial totals.',
+      inputSchema: {
+        id: z.string().min(1),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await getOrder(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_search_orders',
+    {
+      description:
+        'Search orders by Shopify search query (e.g. "name:#1001 OR email:foo@bar.com"). Required: query.',
+      inputSchema: {
+        query: z.string().min(1),
+        first: z.number().int().min(1).max(250).optional(),
+        after: z.string().optional(),
+        sortKey: z.enum(ORDER_SORT_KEYS).optional(),
+        reverse: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await searchOrders(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  // ---- Orders (write) ----
+
+  server.registerTool(
+    'shopify_mark_order_paid',
+    {
+      description:
+        'Mark an order as paid (orderMarkAsPaid). Use for offline payments where the funds were captured outside Shopify. Returns updated order + userErrors.',
+      inputSchema: {
+        id: z.string().min(1),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await markOrderPaid(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_cancel_order',
+    {
+      description:
+        'Cancel an order asynchronously (orderCancel returns a job). Destructive: requires confirm=true. Default reason=OTHER, restock=true, refund=false, notifyCustomer omitted.',
+      inputSchema: {
+        id: z.string().min(1),
+        reason: z.enum(CANCEL_REASONS).optional(),
+        refund: z.boolean().optional(),
+        restock: z.boolean().optional(),
+        notifyCustomer: z.boolean().optional(),
+        staffNote: z.string().optional(),
+        confirm: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await cancelOrder(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    'shopify_add_order_note',
+    {
+      description:
+        'Add a note to an order. mode=append (default) reads the current note and concatenates with two newlines; mode=replace overwrites. Required: id, note. Append makes one extra read query.',
+      inputSchema: {
+        id: z.string().min(1),
+        note: z.string().min(1),
+        mode: z.enum(['append', 'replace']).optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return toolSuccess(await addOrderNote(args));
       } catch (err) {
         return toolError(err);
       }
