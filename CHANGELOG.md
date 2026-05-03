@@ -4,6 +4,12 @@ All notable changes to `@aiwerk/mcp-server-shopify` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-05-03
+
+### Internal
+
+- Added `vitest.config.ts` with `pool: 'threads'`, `singleThread: true`, `testTimeout: 10000`. Prevents worker-orphan OOM scenarios when the parent `npm test` process is killed mid-run (vitest fork-pool default could leave busy-spinning workers attached to systemd). No tool-surface or API change.
+
 ## [Unreleased]
 
 ### Fixed (Axel review round 1, 2026-04-27)

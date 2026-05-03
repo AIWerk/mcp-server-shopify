@@ -1,6 +1,6 @@
 {
   "name": "@aiwerk/mcp-server-shopify",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shopify Admin GraphQL API MCP server by AIWerk - manage products, orders, customers, inventory, and more from your AI agent",
   "type": "module",
   "main": "dist/src/server.js",
